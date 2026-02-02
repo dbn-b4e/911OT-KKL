@@ -77,7 +77,9 @@ kwp1281_send_block(0x07, NULL, 0); // Read fault codes
 
 ## License
 
-MIT License - See [LICENSE](LICENSE)
+PolyForm Noncommercial License 1.0.0 - See [LICENSE](LICENSE)
+
+**Non-commercial use only.** Personal, educational, and research use permitted.
 
 ## Disclaimer
 
