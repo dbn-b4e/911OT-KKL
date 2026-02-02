@@ -1,0 +1,12 @@
+# macOS
+.DS_Store
+
+# Extracted folders (binaries)
+scantool3_extracted/
+T_OBD_extracted/
+
+# Empty folders
+dossier sans titre/
+
+# Claude cache
+.claude/
