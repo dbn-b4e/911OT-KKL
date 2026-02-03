@@ -339,6 +339,22 @@ Exemple pour adresse 0x10 (Motronic):
 Séquence: 0-0-0-0-0-1-0-0-0-1 (Start-LSB...MSB-Stop)
 ```
 
+**IMPORTANT - Logique RTS inversée (confirmé OBDPlot):**
+```c
+// Sur interface K-Line: RTS SET = ligne basse (0), RTS CLR = ligne haute (1)
+// Code OBDPlot pour 0x10:
+EscapeCommFunction(hCom, SETRTS);  Sleep(200);  // bit = 0 (idle)
+EscapeCommFunction(hCom, SETRTS);  Sleep(200);  // bit = 0
+EscapeCommFunction(hCom, SETRTS);  Sleep(200);  // bit = 0
+EscapeCommFunction(hCom, SETRTS);  Sleep(200);  // bit = 0
+EscapeCommFunction(hCom, SETRTS);  Sleep(200);  // bit = 0 (Start)
+EscapeCommFunction(hCom, CLRRTS);  Sleep(200);  // bit = 1 (D4)
+EscapeCommFunction(hCom, SETRTS);  Sleep(200);  // bit = 0
+EscapeCommFunction(hCom, SETRTS);  Sleep(200);  // bit = 0
+EscapeCommFunction(hCom, SETRTS);  Sleep(200);  // bit = 0
+EscapeCommFunction(hCom, CLRRTS);  Sleep(200);  // bit = 1 (Stop)
+```
+
 ### 5.2 Handshake Complet
 
 ```
@@ -349,15 +365,20 @@ Outil                              ECU
   │                                  │
   │<──────── Sync 0x55 ─────────────│
   │                                  │
-  │<──────── Keyword1 ──────────────│
-  │────── ACK (~Keyword1) ─────────>│
+  │<──────── Keyword1 0x0B ─────────│
+  │────── ACK 0xF4 (~0x0B) ────────>│
   │                                  │
-  │<──────── Keyword2 ──────────────│
+  │<──────── Keyword2 0x02 ─────────│
   │  (attendre 30ms)                 │
-  │────── ACK (~Keyword2) ─────────>│
+  │────── ACK 0xFD (~0x02) ────────>│
   │                                  │
   │ === Communication @ baudrate ===│
 ```
+
+**Keywords confirmés (OBDPlot):**
+- Sync byte: **0x55** (vérification baudrate)
+- Keyword 1: **0x0B** → ACK = 0xFF - 0x0B = **0xF4**
+- Keyword 2: **0x02** → ACK = 0xFF - 0x02 = **0xFD** (après 30ms delay)
 
 ### 5.3 Requête Identification ECU
 
@@ -588,6 +609,74 @@ Outil                              ECU
 **Registre Adaptation IAC (964):**
 ```
 Actual Value.Adapted IAC trim = 0x7E4B
+```
+
+### 5.15 Lecture Valeur Simple (OBDPlot)
+
+Source: Analyse du code source OBDPlot v1.3a (Julian Bunn, 2007-2013)
+
+**Type 0x01 - Value Request (lecture paramètre DME):**
+```
+┌────┬────┬────┬────┬────┬────┬────┐
+│ 06 │ XX │ 01 │ 01 │ 00 │ AA │ 03 │
+└────┴────┴────┴────┴────┴────┴────┘
+ Len  Cnt  Cmd  Sub  Hi   Addr ETX
+           │    └────────────── Adresse paramètre (3 bytes)
+           └── 0x01 = Value Request
+```
+
+**Réponse (Type 0xFE):**
+```
+┌────┬────┬────┬────┬────┐
+│ 05 │ XX │ FE │ VV │ 03 │
+└────┴────┴────┴────┴────┘
+           │    └── Valeur (1 byte)
+           └── 0xFE = Binary Data Response
+```
+
+**Type 0x08 - ADC Channel Read:**
+```
+┌────┬────┬────┬────┬────┐
+│ 04 │ XX │ 08 │ CH │ 03 │
+└────┴────┴────┴────┴────┘
+           │    └── Numéro canal ADC (0, 1, ...)
+           └── 0x08 = ADC Read
+```
+
+**Réponse (Type 0xFB):**
+```
+┌────┬────┬────┬────┬────┬────┐
+│ 06 │ XX │ FB │ Vhi│ Vlo│ 03 │
+└────┴────┴────┴────┴────┴────┘
+           │    └── Valeur 16-bit (big-endian)
+           └── 0xFB = ADC Response
+```
+
+### 5.16 Adresses Paramètres Motronic (OBDPlot)
+
+| Paramètre | Adresse | Formule Conversion | Unité |
+|-----------|---------|-------------------|-------|
+| **Intake Air Temp** | 0x01,0x00,0x37 | `(n × 1.15) - 26` | °F |
+| **Cylinder Head Temp** | 0x01,0x00,0x38 | `(n × 1.15) - 26` | °F |
+| **AFM Voltage** | 0x01,0x00,0x45 | `n × 500 / 255` | V |
+| **RPM** | 0x01,0x00,0x3A | `n × 40` | rpm |
+| **Injector Time** | 0x01,0x00,0x42 | `n × 0.05` | ms |
+| **Ignition Advance** | 0x01,0x00,0x5D | `(104 - n) × 207.5 / 255` | ° |
+| **MAF Sensor** | ADC Ch 0 | `n × 500 / 255` | V |
+| **Battery Voltage** | ADC Ch 1 | `n × 6.82 / 1000` | V |
+
+**Conversion Température F → C:**
+```c
+float temp_c = (temp_f - 32) * 5.0 / 9.0;
+// Ou directement: temp_c = (n * 0.639) - 47.8
+```
+
+**Exemple ESP32 - Lecture RPM:**
+```c
+uint8_t read_rpm[] = {0x06, block_num, 0x01, 0x01, 0x00, 0x3A, 0x03};
+kwp1281_send_block(read_rpm, sizeof(read_rpm));
+// Réponse: [0x05, XX, 0xFE, rpm_raw, 0x03]
+uint16_t rpm = response[3] * 40;
 ```
 
 ---
