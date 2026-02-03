@@ -46,6 +46,19 @@
 - [ ] Identifier signaux digitaux vs analogiques
 - [ ] Corréler canaux ADC avec pins physiques DME
 
+### Reverse Engineering CCU (Climate Control)
+- [ ] Connecter CCU 0x51 @ 4800 baud
+- [ ] Scanner ActuatorTest (0x10) avec numéros 0x01-0x10
+- [ ] Documenter correspondance numéro ↔ servo:
+  - Fresh air servo (964 624 901 00)
+  - Defrost servo (964 624 902 00)
+  - Footwell servo (964 624 903 00 / 993 572 905 00)
+  - Mixer servo L/R (964 624 324 00 / 993 624 325 00)
+  - Blower motors (condenser, oil cooler, rear)
+- [ ] Tester séquence test auto intégré (993)
+- [ ] Scanner ReadGroup CCU pour capteurs (temp évap, ext, habitacle)
+- [ ] Documenter Actual Values CCU
+
 ### Documentation
 - [ ] Schéma électrique final
 - [ ] BOM (Bill of Materials)
