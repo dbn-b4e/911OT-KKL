@@ -39,6 +39,13 @@
 - [ ] Valider lecture/effacement codes défaut
 - [ ] Valider workaround Drive Block (993)
 
+### Reverse Engineering (sur véhicule)
+- [ ] Scanner canaux ADC 0-15 (commande 0x08) et documenter réponses
+- [ ] Scanner adresses Value Request 0x00-0xFF et identifier paramètres
+- [ ] Documenter pinout DME 55 broches avec oscilloscope
+- [ ] Identifier signaux digitaux vs analogiques
+- [ ] Corréler canaux ADC avec pins physiques DME
+
 ### Documentation
 - [ ] Schéma électrique final
 - [ ] BOM (Bill of Materials)
