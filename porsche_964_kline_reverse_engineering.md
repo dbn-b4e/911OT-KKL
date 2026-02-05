@@ -210,6 +210,49 @@ Les moteurs 965 n'ont **PAS** de protection anti-cliquetis électronique. Porsch
 | **ABS/Traction** | 61 (0x3D) | 4800 | **OUI** |
 | **Climate (CCU)** | 81 (0x51) | 4800 | **OUI** |
 | **Airbag (SRS)** | 87 (0x57) | 9600 | **OUI** |
+| **Alarm** | 64 (0x40) | 9600 | **OUI** |
+
+### LED Blink Code (Check Engine - US uniquement)
+
+**ATTENTION**: Cette méthode n'est disponible que sur les modèles US équipés du voyant "Check Engine".
+
+**Procédure:**
+```
+1. Contact ON (ne pas démarrer le moteur)
+2. Appuyer À FOND sur la pédale d'accélérateur
+3. Attendre que le voyant "Check Engine" clignote
+4. Relâcher l'accélérateur
+5. Compter les clignotements:
+   - Pause courte = séparation chiffres (ex: 2 flash - pause - 4 flash = code 24)
+   - Pause longue = séparation codes
+6. Code 0000 = pas de défaut mémorisé
+```
+
+**Codes Blink DME (964 Carrera / limité sur 965):**
+
+| Code | Description |
+|------|-------------|
+| 11 | Tension alimentation |
+| 12 | Contact ralenti court-circuit masse |
+| 13 | Contact pleine charge |
+| 14 | Sonde température moteur 2 |
+| 15 | Contact ralenti coupure |
+| 21 | Débitmètre air |
+| 22 | Régulation ralenti |
+| 23 | Régulation O2 arrêtée |
+| 24 | Signal sonde O2 |
+| 25 | Sonde température air admission |
+| 31 | Capteur cliquetis 1 |
+| 32 | Capteur cliquetis 2 |
+| 33 | Calculateur défectueux |
+| 34 | Signal Hall |
+| 41 | Calculateur défectueux |
+| 43 | Électrovanne purge réservoir |
+| 44 | Volet résonance |
+| 45 | Voyant Check Engine |
+| 51-56 | Injecteur cylindre 1-6 |
+
+**Note 965**: Sur le 964 Turbo (CIS), cette méthode est très limitée car il n'y a pas de Motronic. Seule la sonde O2 (si équipée) peut être vérifiée.
 
 ### Diagnostic alternatif moteur 965
 
@@ -884,6 +927,38 @@ uint8_t type = (status >> 6);   // Bits 6-7
 | 21 | Input 1 to gnd during activation |
 | 22 | Input 3 to positive during activation |
 | 23-26 | Fault memory |
+
+### Alarm - Entrées Diagnostic (Input Signals)
+
+Adresse: **0x40 @ 9600 baud**
+
+| Input | Signal | Description |
+|-------|--------|-------------|
+| 1 | Door sw | Contact porte (ouverte/fermée) |
+| 2 | EngineHood | Capot moteur |
+| 3 | LuggageComp | Coffre avant |
+| 4 | PositionSw | Position verrouillage |
+| 6 | CentralLock | Bouton verrouillage central |
+| 7 | GloveComp | Boîte à gants |
+| 8 | Radio | Signal autoradio |
+
+### Alarm - Switches
+
+| Switch | Description |
+|--------|-------------|
+| Act | Alarme activée |
+| DeA | Alarme désactivée |
+
+### Alarm - Commandes Disponibles
+
+| Commande | Code | Description |
+|----------|------|-------------|
+| ReadFaults | 0x07 | Lire codes défaut mémorisés |
+| ClearFaults | 0x05 | Effacer codes défaut |
+| GetECUID | 0x00 | Identification module |
+| ReadGroup | 0x29 | Lecture groupe (états capteurs) |
+
+**Note**: L'activation/désactivation de l'alarme ne se fait PAS via K-Line (sécurité). Utiliser télécommande ou clé.
 
 ### Codes Défaut Tiptronic [G00]
 
