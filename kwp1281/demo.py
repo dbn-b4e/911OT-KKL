@@ -194,6 +194,14 @@ class DemoProtocol:
             (1, random.randint(0, 255), random.randint(0, 255)),
         ]
 
+    def read_adc(self, channel):
+        """Simulate reading an ADC channel. Returns 16-bit value."""
+        if not self.connected:
+            return None
+        self.on_log(f"[DEMO] ADC read channel {channel}")
+        time.sleep(0.2)
+        return random.randint(0, 1023)
+
     def login(self, pin_hi, pin_lo, workshop=0x00):
         """Simulate login."""
         if not self.connected:

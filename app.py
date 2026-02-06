@@ -492,6 +492,208 @@ def main(page: ft.Page):
     actuator_panel = ft.Column([act_col], expand=True)
 
     # ══════════════════════════════════════
+    #  TAB: ADVANCED
+    # ══════════════════════════════════════
+
+    def _section_header(title):
+        return ft.Container(
+            ft.Text(title, size=13, weight=ft.FontWeight.BOLD, color=ACCENT),
+            bgcolor=PANEL2, border_radius=4,
+            padding=ft.Padding.symmetric(vertical=8, horizontal=12),
+            margin=ft.Margin.only(top=8),
+        )
+
+    # -- ReadGroup --
+    grp_input = ft.TextField(value="1", width=80, dense=True, text_size=13,
+                             bgcolor=PANEL2, border_color=BORDER, border_radius=6, color=TEXT)
+    grp_result = ft.Text("", size=12, color=TEXT, font_family="Menlo")
+
+    def read_group_click(e):
+        if not state["connected"] or proto[0] is None:
+            return
+        def _do():
+            try:
+                grp = int(grp_input.value)
+            except ValueError:
+                grp_result.value = "Invalid group number"
+                safe_update()
+                return
+            log(f"ReadGroup {grp}...")
+            try:
+                vals = proto[0].read_group(grp)
+            except Exception as ex:
+                grp_result.value = f"Error: {ex}"
+                safe_update()
+                return
+            lines = []
+            for i, (f_id, va, vb) in enumerate(vals):
+                val16 = (va << 8) | vb
+                lines.append(f"  [{i+1}] formula={f_id:3d}  a=0x{va:02X}  b=0x{vb:02X}  (val={val16})")
+            grp_result.value = "\n".join(lines) if lines else "No data"
+            safe_update()
+        threading.Thread(target=_do, daemon=True).start()
+
+    btn_grp = ft.Button(content="Read", bgcolor=ACCENT, color=BG, height=30, disabled=True,
+                        on_click=read_group_click,
+                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6)))
+
+    # -- ADC --
+    adc_input = ft.TextField(value="0", width=80, dense=True, text_size=13,
+                             bgcolor=PANEL2, border_color=BORDER, border_radius=6, color=TEXT)
+    adc_result = ft.Text("", size=12, color=TEXT, font_family="Menlo")
+
+    def read_adc_click(e):
+        if not state["connected"] or proto[0] is None:
+            return
+        def _do():
+            try:
+                ch = int(adc_input.value)
+            except ValueError:
+                adc_result.value = "Invalid channel"
+                safe_update()
+                return
+            log(f"ADC read ch={ch}...")
+            try:
+                val = proto[0].read_adc(ch)
+            except Exception as ex:
+                adc_result.value = f"Error: {ex}"
+                safe_update()
+                return
+            adc_result.value = f"  Channel {ch}: {val}" if val is not None else "  No response"
+            safe_update()
+        threading.Thread(target=_do, daemon=True).start()
+
+    btn_adc = ft.Button(content="Read", bgcolor=ACCENT, color=BG, height=30, disabled=True,
+                        on_click=read_adc_click,
+                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6)))
+
+    # -- Login --
+    login_pin_hi = ft.TextField(value="00", width=60, dense=True, text_size=13,
+                                bgcolor=PANEL2, border_color=BORDER, border_radius=6, color=TEXT)
+    login_pin_lo = ft.TextField(value="00", width=60, dense=True, text_size=13,
+                                bgcolor=PANEL2, border_color=BORDER, border_radius=6, color=TEXT)
+    login_result = ft.Text("", size=12, color=TEXT)
+
+    def login_click(e):
+        if not state["connected"] or proto[0] is None:
+            return
+        def _do():
+            try:
+                phi = int(login_pin_hi.value, 16)
+                plo = int(login_pin_lo.value, 16)
+            except ValueError:
+                login_result.value = "Invalid hex PIN"
+                safe_update()
+                return
+            log(f"Login {phi:02X}{plo:02X}...")
+            try:
+                ok = proto[0].login(phi, plo)
+            except Exception as ex:
+                login_result.value = f"Error: {ex}"
+                safe_update()
+                return
+            login_result.value = "Login OK" if ok else "Login FAILED"
+            login_result.color = GREEN if ok else RED
+            safe_update()
+        threading.Thread(target=_do, daemon=True).start()
+
+    btn_login = ft.Button(content="Login", bgcolor=ACCENT, color=BG, height=30, disabled=True,
+                          on_click=login_click,
+                          style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6)))
+
+    # -- Adaptation --
+    adapt_ch = ft.TextField(value="0", width=80, dense=True, text_size=13,
+                            bgcolor=PANEL2, border_color=BORDER, border_radius=6, color=TEXT)
+    adapt_val = ft.TextField(value="0", width=100, dense=True, text_size=13,
+                             bgcolor=PANEL2, border_color=BORDER, border_radius=6, color=TEXT)
+    adapt_result = ft.Text("", size=12, color=TEXT, font_family="Menlo")
+
+    def adapt_read_click(e):
+        if not state["connected"] or proto[0] is None:
+            return
+        def _do():
+            try:
+                ch = int(adapt_ch.value)
+            except ValueError:
+                adapt_result.value = "Invalid channel"
+                safe_update()
+                return
+            log(f"ReadAdapt ch={ch}...")
+            try:
+                result = proto[0].read_adaptation(ch)
+            except Exception as ex:
+                adapt_result.value = f"Error: {ex}"
+                safe_update()
+                return
+            if result:
+                ch_r, val = result
+                adapt_result.value = f"  Channel {ch_r}: {val} (0x{val:04X})"
+                adapt_val.value = str(val)
+            else:
+                adapt_result.value = "  No response"
+            safe_update()
+        threading.Thread(target=_do, daemon=True).start()
+
+    def adapt_write_click(e):
+        if not state["connected"] or proto[0] is None:
+            return
+        def _do():
+            try:
+                ch = int(adapt_ch.value)
+                val = int(adapt_val.value)
+            except ValueError:
+                adapt_result.value = "Invalid channel or value"
+                safe_update()
+                return
+            log(f"WriteAdapt ch={ch} val={val}...")
+            try:
+                ok = proto[0].write_adaptation(ch, val)
+            except Exception as ex:
+                adapt_result.value = f"Error: {ex}"
+                safe_update()
+                return
+            adapt_result.value = f"  Write {'OK' if ok else 'FAILED'}"
+            adapt_result.color = GREEN if ok else RED
+            safe_update()
+        threading.Thread(target=_do, daemon=True).start()
+
+    btn_adapt_read = ft.Button(content="Read", bgcolor=ACCENT, color=BG, height=30, disabled=True,
+                               on_click=adapt_read_click,
+                               style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6)))
+    btn_adapt_write = ft.Button(content="Write", bgcolor=RED, color=TEXT, height=30, disabled=True,
+                                on_click=adapt_write_click,
+                                style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6)))
+
+    adv_btns = [btn_grp, btn_adc, btn_login, btn_adapt_read, btn_adapt_write]
+
+    advanced_panel = ft.Column([
+        ft.Column([
+            # ReadGroup
+            _section_header("Measurement Groups (ReadGroup 0x29)"),
+            ft.Row([ft.Text("Group", size=12, color=DIM), grp_input, btn_grp],
+                   vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=8),
+            grp_result,
+            # ADC
+            _section_header("ADC Channels (0x08)"),
+            ft.Row([ft.Text("Channel", size=12, color=DIM), adc_input, btn_adc],
+                   vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=8),
+            adc_result,
+            # Login
+            _section_header("Login (993 Drive Block)"),
+            ft.Row([ft.Text("PIN", size=12, color=DIM),
+                    login_pin_hi, ft.Text(":", size=12, color=DIM), login_pin_lo,
+                    btn_login, login_result],
+                   vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=8),
+            # Adaptation
+            _section_header("System Adaptation (0x2B/0x2C)"),
+            ft.Row([ft.Text("Channel", size=12, color=DIM), adapt_ch, btn_adapt_read,
+                    ft.Text("Value", size=12, color=DIM), adapt_val, btn_adapt_write],
+                   vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=8),
+            adapt_result,
+        ], spacing=6, scroll=ft.ScrollMode.AUTO, expand=True),
+    ], expand=True)
+
+    # ══════════════════════════════════════
     #  TAB: LOG
     # ══════════════════════════════════════
 
@@ -501,8 +703,8 @@ def main(page: ft.Page):
     #  TAB SYSTEM
     # ══════════════════════════════════════
 
-    panels = [fault_panel, live_panel, actuator_panel, log_panel]
-    tab_names = ["Fault Codes", "Live Data", "Actuators", "Log"]
+    panels = [fault_panel, live_panel, actuator_panel, advanced_panel, log_panel]
+    tab_names = ["Fault Codes", "Live Data", "Actuators", "Advanced", "Log"]
 
     content_area = ft.Container(
         content=panels[0],
@@ -643,6 +845,8 @@ def main(page: ft.Page):
                 btn_live_start.disabled = False
                 for b in act_btns:
                     b.disabled = False
+                for b in adv_btns:
+                    b.disabled = False
 
                 if is_demo:
                     demo_badge.visible = True
@@ -688,6 +892,8 @@ def main(page: ft.Page):
             btn_live_start.disabled = True
             btn_live_stop.disabled = True
             for b in act_btns:
+                b.disabled = True
+            for b in adv_btns:
                 b.disabled = True
 
             info_label.value = "Not connected"
