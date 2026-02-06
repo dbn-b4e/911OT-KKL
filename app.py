@@ -91,12 +91,12 @@ def main(page: ft.Page):
             ft.Text("License: MIT", size=12, color=DIM),
         ], tight=True, spacing=6, width=380),
         actions=[
-            ft.TextButton("Close", on_click=lambda e: page.close(about_dlg)),
+            ft.TextButton("Close", on_click=lambda e: page.pop_dialog()),
         ],
     )
 
     def show_about(e):
-        page.open(about_dlg)
+        page.show_dialog(about_dlg)
 
     # ══════════════════════════════════════
     #  HEADER
