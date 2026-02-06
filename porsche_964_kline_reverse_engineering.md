@@ -1488,58 +1488,116 @@ Pour construire une interface hardware propre, utiliser un IC dédié K-Line :
 | **SN65HVDA100** | Texas Instruments | SO-8 | [TI](https://www.ti.com/product/SN65HVDA100) | Alternative au 195 |
 | **Si9241** | Vishay | SO-8 | [Vishay](https://www.vishay.com) | Moins courant |
 
-#### Schéma Typique L9637D
+#### Pinout L9637D (SO-8)
 
 ```
-                          +12V (VBAT)
-                            │
-                         [100nF]
-                            │
-         ┌──────────────────┴──────────────────┐
-         │                L9637D               │
-         │                                     │
-    1 ───┤ TX        ┌─────────┐          VS ├─── +12V
-         │           │         │               │
-    2 ───┤ GND       │  K-Line │           K ├───────── K-Line (Pin 8)
-         │           │Transceiv│               │           │
-    3 ───┤ RX        │         │         ISO ├─── NC    [510Ω]
-         │           └─────────┘               │           │
-    4 ───┤ VCC (+5V)                      GND ├─── GND   +12V
-         │                                     │
-         └─────────────────────────────────────┘
-
-         Pin 1 (TX)  ◄─── ESP32 TX (GPIO17)
-         Pin 3 (RX)  ───► ESP32 RX (GPIO16)
-         Pin 4 (VCC) ◄─── +5V ou +3.3V (selon variante)
-         Pin 2 (GND) ◄─── GND commun
+         ┌────────────┐
+    RX  1│            │8  LI (L-Line in)
+    LO  2│  L9637D    │7  VS (+12V)
+   VCC  3│            │6  K  (K-Line)
+    TX  4│            │5  GND
+         └────────────┘
 ```
 
-**Notes L9637D :**
-- VCC : 5V (version standard) ou 3.3V (vérifier datasheet)
-- Pull-up 510Ω sur K-Line vers +12V (intégré ou externe selon IC)
-- Condensateur 100nF sur VS (alimentation 12V)
-- TX/RX compatibles 3.3V pour ESP32
+| Pin | Nom | Direction | Fonction |
+|-----|-----|-----------|----------|
+| 1 | RX | Output → MCU | K-Line → logique TTL (lecture) |
+| 2 | LO | Output | L-Line output (optionnel, NC si pas utilisé) |
+| 3 | VCC | Power | +5V alimentation logique |
+| 4 | TX | Input ← MCU | Logique TTL → K-Line (écriture) |
+| 5 | GND | Power | Masse commune |
+| 6 | K | Bidir | K-Line (open-drain + pull-up interne vers VS) |
+| 7 | VS | Power | +12V batterie véhicule |
+| 8 | LI | Input | L-Line input (optionnel, NC si pas utilisé) |
 
-#### Schéma SN65HVDA195 (TI)
+**Comportement TX → K-Line :**
+- **TX LOW** → MOSFET interne ON → K-Line tiré à GND (~60mA max)
+- **TX HIGH** → MOSFET interne OFF → K-Line remonte à +12V via pull-up interne
+- C'est un **transceiver transparent** : aucun protocole, TX sort directement sur K
+
+#### Schéma ESP32 + L9637D (GPIO bit-bang pour 5-baud)
 
 ```
-                          VBAT (+12V)
-                            │
-         ┌──────────────────┴──────────────────┐
-         │             SN65HVDA195             │
-         │                                     │
-    1 ───┤ TXD                           VBB ├─── +12V
-         │                                     │     │
-    2 ───┤ GND                             K ├─────┼── K-Line
-         │                                     │     │
-    3 ───┤ RXD                            EN ├───┘  (pull-up interne)
-         │                                     │
-    4 ───┤ VCC (+3.3V)                   GND ├─── GND
-         │                                     │
-         └─────────────────────────────────────┘
+ESP32                        L9637D                    OBD Connector
+┌──────────┐          ┌──────────────────┐          ┌──────────────┐
+│          │          │                  │          │              │
+│  GPIO17 ─┼─────────┤► TX (4)  K (6) ──┼──────────┤─ Pin 8 K-Line│
+│  (TX)    │          │                  │          │              │
+│  GPIO16 ◄┼──────────┤  RX (1)  VS (7)─┼──────────┤─ Pin 12 +12V │
+│  (RX)    │          │                  │   100nF  │              │
+│     3.3V─┼──────────┤  VCC(3)  GND(5)─┼──────────┤─ Pin 10 GND  │
+│      GND─┼──────────┤  GND(5)         │          │              │
+│          │          │  LI(8)=NC       │          └──────────────┘
+│          │          │  LO(2)=NC       │
+└──────────┘          └──────────────────┘
 
-         EN : Connecter à +3.3V ou GPIO pour enable/disable
+Init 5-baud : bit-bang GPIO17 avec digitalWrite(), 200ms/bit
+Communication : UART HW sur GPIO17/16 @ 8800 ou 9600 baud
 ```
+
+**Notes ESP32 + L9637D :**
+- VCC : 5V (via régulateur) - le L9637D n'est PAS 3.3V natif
+- TX/RX sont compatibles 3.3V en entrée (seuil TTL)
+- Condensateur 100nF sur VS (découplage 12V)
+- Pull-up K-Line intégré dans le L9637D (pas de 510Ω externe nécessaire)
+- Pour le 5-baud : on switch GPIO17 entre mode GPIO et mode UART
+
+#### Schéma USB "Dumb Cable" FTDI + L9637D (Wired-OR pour 5-baud via RTS)
+
+Sur un PC, pyserial ne peut pas bit-bang le TX directement. La solution
+utilisée par les câbles VAG KKL : **OR câblé (wired-OR) avec diodes** entre
+TX et RTS avant l'entrée TX du L9637D.
+
+```
+FTDI FT232RL                          L9637D                OBD
+┌──────────────┐   1N4148         ┌────────────────┐    ┌────────┐
+│              │    ┌──┐          │                │    │        │
+│  TX (data) ──┼───►│  ├────┐    │                │    │        │
+│              │    └──┘    ├────┤► TX (4)  K (6)──┼────┤ Pin 8  │
+│  RTS (init)──┼───►│  ├────┘    │                │    │ K-Line │
+│              │    └──┘         │  RX (1)  VS(7)─┼────┤ Pin 12 │
+│  RX ◄────────┼─────────────────┤  (out)         │    │ +12V   │
+│              │                 │ VCC(3)  GND(5)─┼────┤ Pin 10 │
+│  +5V ────────┼─────────────────┤  (+5V)         │    │ GND    │
+│  GND ────────┼─────────────────┤  GND(5)        │    │        │
+└──────────────┘                 └────────────────┘    └────────┘
+
+Phase 1 (5-baud init) : TX=idle HIGH, RTS bit-bang 200ms/bit
+  → diode RTS passe le LOW → L9637D TX voit LOW → K-Line LOW
+Phase 2 (8800/9600)   : RTS=idle, TX=UART normal
+  → diode TX passe les données → L9637D TX → K-Line data
+```
+
+**Principe du Wired-OR :**
+- Deux diodes 1N4148 (cathodes vers L9637D TX, anodes depuis FTDI TX et RTS)
+- Résistance pull-up 10kΩ sur le point commun vers VCC
+- Quand TX **ou** RTS est LOW → L9637D TX = LOW → K-Line LOW
+- Quand les deux sont HIGH → L9637D TX = HIGH → K-Line relâché (+12V)
+
+**Logique RTS (pyserial avec interface OBDPlot/T-OBD) :**
+```python
+# rts_inverted=True (standard KKL cables)
+ser.rts = True   # SETRTS → K-Line LOW  (pull-down)
+ser.rts = False   # CLRRTS → K-Line HIGH (release)
+```
+
+#### Schéma SN65HVDA195 (TI) - Alternative moderne
+
+```
+         ┌────────────┐
+   TXD  1│            │8  EN (enable)
+   GND  2│ SN65HVDA   │7  VBB (+12V)
+   RXD  3│    195     │6  K  (K-Line)
+   VCC  4│            │5  GND
+         └────────────┘
+
+   EN : Connecter à VCC (+3.3V) pour activer
+   Pull-up K-Line intégré
+   VCC : 3.3V natif (avantage vs L9637D)
+```
+
+Même principe d'utilisation que le L9637D. Avantage : fonctionne directement
+en 3.3V pour ESP32 sans régulateur 5V supplémentaire.
 
 ---
 
